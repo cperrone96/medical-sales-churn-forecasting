@@ -21,10 +21,11 @@ Business Development, reproduced here on shareable **synthetic** data.
 
 ## Results
 
-- **Churn:** Logistic Regression leads at ROC-AUC ≈ 0.81. Engagement, order
-  recency, support-ticket load, and discount depth are the dominant drivers.
-  Ranking accounts by predicted risk lifts top-decile precision to ~2.5× the base
-  churn rate — the same outreach effort reaches far more real churners.
+- **Churn:** Logistic Regression leads at ROC-AUC ≈ 0.81. By feature importance
+  the dominant drivers are order recency, engagement, and rep tenure, with
+  discount depth and order frequency contributing modestly. Ranking accounts by
+  predicted risk lifts top-decile precision to ~2.5× the base churn rate — the
+  same outreach effort reaches far more real churners.
 - **Revenue:** Holt-Winters (additive trend + multiplicative seasonality) tracks
   the 6-month holdout within a single-digit MAPE and projects the growth
   trajectory forward.
