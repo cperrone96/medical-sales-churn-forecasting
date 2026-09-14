@@ -49,24 +49,40 @@ def bootstrap_ci(y, p, n=200):
 
 
 def _forecast_predictions(history: pd.Series, horizon: int, method: str):
+    def interval(pred, residual, requested, used, status):
+        spread = float(np.std(residual, ddof=1)) if len(residual) > 1 else 0.0
+        return np.asarray(pred), np.asarray(pred) - 1.96 * spread, np.asarray(pred) + 1.96 * spread, {"requested_method": requested, "model_used": used, "fit_status": status}
+
     if method == "seasonal_naive":
         if len(history) < 12:
             pred = np.repeat(history.iloc[-1], horizon)
         else:
             pred = np.resize(history.iloc[-12:].to_numpy(), horizon)
         residual = history.iloc[12:].to_numpy() - history.iloc[:-12].to_numpy() if len(history) > 12 else np.diff(history.to_numpy())
+        return interval(pred, residual, method, method, "valid")
     elif method == "drift":
         slope = (history.iloc[-1] - history.iloc[0]) / max(len(history) - 1, 1)
         pred = history.iloc[-1] + slope * np.arange(1, horizon + 1)
         residual = np.diff(history.to_numpy())
+        return interval(pred, residual, method, method, "valid")
     else:
+        import warnings
+        from statsmodels.tools.sm_exceptions import ConvergenceWarning
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
         seasonal = 12 if len(history) >= 24 else None
-        fit = ExponentialSmoothing(history, trend="add", seasonal="add" if seasonal else None, seasonal_periods=seasonal, initialization_method="estimated").fit(optimized=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            fit = ExponentialSmoothing(history, trend="add", seasonal="add" if seasonal else None, seasonal_periods=seasonal, initialization_method="estimated").fit(optimized=True)
+        converged = bool(getattr(fit, "mle_retvals", {}).get("converged", True))
+        warned = any(issubclass(w.category, ConvergenceWarning) for w in caught)
+        if not converged or warned:
+            # Never present a failed optimizer result as a valid Holt-Winters
+            # forecast. Drift is a deterministic, explicitly labeled fallback.
+            pred, low, high, _ = _forecast_predictions(history, horizon, "drift")
+            return pred, low, high, {"requested_method": method, "model_used": "drift", "fit_status": "fallback_nonconverged"}
         pred = fit.forecast(horizon).to_numpy()
         residual = np.asarray(fit.resid)
-    spread = float(np.std(residual, ddof=1)) if len(residual) > 1 else 0.0
-    return np.asarray(pred), np.asarray(pred) - 1.96 * spread, np.asarray(pred) + 1.96 * spread
+        return interval(pred, residual, method, method, "valid")
 
 
 def rolling_origin(revenue: pd.Series, origins=(24, 30, 36), horizon=3):
@@ -76,8 +92,8 @@ def rolling_origin(revenue: pd.Series, origins=(24, 30, 36), horizon=3):
             continue
         history, actual = revenue.iloc[:origin], revenue.iloc[origin:origin + horizon]
         for method in ("seasonal_naive", "drift", "holt_winters"):
-            pred, low, high = _forecast_predictions(history, horizon, method)
-            rows.append({"origin": str(revenue.index[origin - 1]), "method": method, "horizon": horizon, "mae": float(mean_absolute_error(actual, pred)), "rmse": float(mean_squared_error(actual, pred) ** .5), "coverage_95": float(np.mean((actual.to_numpy() >= low) & (actual.to_numpy() <= high)))})
+            pred, low, high, info = _forecast_predictions(history, horizon, method)
+            rows.append({"origin": str(revenue.index[origin - 1]), "method": method, **info, "horizon": horizon, "mae": float(mean_absolute_error(actual, pred)), "rmse": float(mean_squared_error(actual, pred) ** .5), "coverage_95": float(np.mean((actual.to_numpy() >= low) & (actual.to_numpy() <= high)))})
     return pd.DataFrame(rows)
 
 
@@ -100,17 +116,17 @@ def run_analysis(data_dir="data", output_dir="metrics"):
     # A top-decile policy is reported descriptively, not as a guaranteed lift.
     n = max(1, len(test) // 10); top = np.argsort(-p_test)[:n]
     ranking = {"top_decile_precision": float(test.churned.iloc[top].mean()), "base_rate": float(test.churned.mean()), "top_decile_capture": float(test.churned.iloc[top].sum() / max(test.churned.sum(), 1))}
-    coef = np.abs(model.named_steps["model"].coef_[0]); names = model.named_steps["preprocess"].get_feature_names_out()
-    pd.DataFrame({"encoded_feature": names, "coefficient_abs": coef}).sort_values("coefficient_abs", ascending=False).to_csv(out / "churn_logistic_coefficients.csv", index=False)
+    coef = model.named_steps["model"].coef_[0]; names = model.named_steps["preprocess"].get_feature_names_out()
+    pd.DataFrame({"encoded_feature": names, "coefficient": coef, "coefficient_abs": np.abs(coef), "standardized": True}).sort_values("coefficient_abs", ascending=False).to_csv(out / "churn_logistic_coefficients.csv", index=False)
     rev = pd.read_csv(data_dir / "monthly_revenue.csv", parse_dates=["month"]).set_index("month")["revenue"].sort_index()
     holdout = 6; train_rev, test_rev = rev.iloc[:-holdout], rev.iloc[-holdout:]
     forecasts = []
     for method in ("seasonal_naive", "drift", "holt_winters"):
-        pred, low, high = _forecast_predictions(train_rev, holdout, method)
-        forecasts.append({"method": method, "horizon": holdout, "mae": float(mean_absolute_error(test_rev, pred)), "rmse": float(mean_squared_error(test_rev, pred) ** .5), "mape": float(np.mean(np.abs((test_rev.to_numpy() - pred) / test_rev.to_numpy()))), "coverage_95": float(np.mean((test_rev.to_numpy() >= low) & (test_rev.to_numpy() <= high)))})
+        pred, low, high, info = _forecast_predictions(train_rev, holdout, method)
+        forecasts.append({"method": method, **info, "horizon": holdout, "mae": float(mean_absolute_error(test_rev, pred)), "rmse": float(mean_squared_error(test_rev, pred) ** .5), "mape": float(np.mean(np.abs((test_rev.to_numpy() - pred) / test_rev.to_numpy()))), "coverage_95": float(np.mean((test_rev.to_numpy() >= low) & (test_rev.to_numpy() <= high)))})
     rolling = rolling_origin(rev)
     rolling.to_csv(out / "rolling_origin_forecasts.csv", index=False)
-    summary = {"data_contract": {"snapshot_date": "account state date", "observation_window": "features describe behavior available by snapshot_date", "future_horizon_days": 90, "synthetic": True}, "temporal_split": {"train_end": str(train.snapshot_date.max()), "validation_end": str(val.snapshot_date.max()), "test_start": str(test.snapshot_date.min()), "rows": [len(train), len(val), len(test)]}, "classification": classification, "uncertainty_95pct": bootstrap_ci(test.churned.to_numpy(), p_test), "ranking": ranking, "forecast_holdout": forecasts, "forecast_rolling_origin": rolling.to_dict(orient="records"), "interpretation": "selected logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"}
+    summary = {"data_contract": {"snapshot_date": "account state date", "observation_window": "features describe behavior available by snapshot_date", "future_horizon_days": 90, "synthetic": True}, "temporal_split": {"train_end": str(train.snapshot_date.max()), "validation_end": str(val.snapshot_date.max()), "test_start": str(test.snapshot_date.min()), "rows": [len(train), len(val), len(test)]}, "classification": classification, "uncertainty_95pct": bootstrap_ci(test.churned.to_numpy(), p_test), "ranking": ranking, "forecast_holdout": forecasts, "forecast_rolling_origin": rolling.to_dict(orient="records"), "interpretation": "signed standardized logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"}
     (out / "sales_metrics.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 

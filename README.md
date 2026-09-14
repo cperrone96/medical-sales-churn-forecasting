@@ -13,13 +13,16 @@ features describe behavior available on `snapshot_date`, and `churned` is the
 label in the next 90 days. The classification model uses chronological
 train/validation/test partitions, a prevalence baseline, balanced logistic
 regression, Brier score, quantile calibration, bootstrap intervals, top-decile
-ranking diagnostics, and standardized logistic coefficients. No feature is
+ranking diagnostics, and signed standardized logistic coefficients (with an
+absolute-value column only for sorting). No feature is
 allowed to use the future label.
 
 Revenue evaluation uses a six-month untouched holdout plus rolling-origin
 backtesting. Seasonal-naive and drift are reported alongside Holt–Winters;
 each forecast includes a simple residual-based 95% interval and horizon error.
-Intervals are descriptive under this synthetic generator, not guarantees.
+Optimizer convergence is checked; a non-converged Holt–Winters fit is never
+reported as valid and is labeled with an explicit drift fallback in the
+metrics. Intervals are descriptive under this synthetic generator, not guarantees.
 
 ## Run
 

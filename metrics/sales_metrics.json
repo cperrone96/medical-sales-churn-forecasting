@@ -65,6 +65,9 @@
   "forecast_holdout": [
     {
       "method": "seasonal_naive",
+      "requested_method": "seasonal_naive",
+      "model_used": "seasonal_naive",
+      "fit_status": "valid",
       "horizon": 6,
       "mae": 399850.0,
       "rmse": 406718.913993436,
@@ -73,6 +76,9 @@
     },
     {
       "method": "drift",
+      "requested_method": "drift",
+      "model_used": "drift",
+      "fit_status": "valid",
       "horizon": 6,
       "mae": 223986.66666666666,
       "rmse": 266515.29040384834,
@@ -81,10 +87,13 @@
     },
     {
       "method": "holt_winters",
+      "requested_method": "holt_winters",
+      "model_used": "drift",
+      "fit_status": "fallback_nonconverged",
       "horizon": 6,
-      "mae": 172505.65922206055,
-      "rmse": 200677.61122242233,
-      "mape": 0.17615665491137286,
+      "mae": 223986.66666666666,
+      "rmse": 266515.29040384834,
+      "mape": 0.22590677474185003,
       "coverage_95": 0.16666666666666666
     }
   ],
@@ -92,6 +101,9 @@
     {
       "origin": "2023-12-01 00:00:00",
       "method": "seasonal_naive",
+      "requested_method": "seasonal_naive",
+      "model_used": "seasonal_naive",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 186166.66666666666,
       "rmse": 190952.42863079798,
@@ -100,6 +112,9 @@
     {
       "origin": "2023-12-01 00:00:00",
       "method": "drift",
+      "requested_method": "drift",
+      "model_used": "drift",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 96017.39130434782,
       "rmse": 112461.93715826161,
@@ -108,14 +123,20 @@
     {
       "origin": "2023-12-01 00:00:00",
       "method": "holt_winters",
+      "requested_method": "holt_winters",
+      "model_used": "drift",
+      "fit_status": "fallback_nonconverged",
       "horizon": 3,
-      "mae": 59920.43849773309,
-      "rmse": 74525.82771346561,
+      "mae": 96017.39130434782,
+      "rmse": 112461.93715826161,
       "coverage_95": 0.3333333333333333
     },
     {
       "origin": "2024-06-01 00:00:00",
       "method": "seasonal_naive",
+      "requested_method": "seasonal_naive",
+      "model_used": "seasonal_naive",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 269733.3333333333,
       "rmse": 271638.4484322252,
@@ -124,6 +145,9 @@
     {
       "origin": "2024-06-01 00:00:00",
       "method": "drift",
+      "requested_method": "drift",
+      "model_used": "drift",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 69544.82758620688,
       "rmse": 78482.13567617348,
@@ -132,14 +156,20 @@
     {
       "origin": "2024-06-01 00:00:00",
       "method": "holt_winters",
+      "requested_method": "holt_winters",
+      "model_used": "drift",
+      "fit_status": "fallback_nonconverged",
       "horizon": 3,
-      "mae": 81423.67329604295,
-      "rmse": 92903.1790483971,
+      "mae": 69544.82758620688,
+      "rmse": 78482.13567617348,
       "coverage_95": 0.3333333333333333
     },
     {
       "origin": "2024-12-01 00:00:00",
       "method": "seasonal_naive",
+      "requested_method": "seasonal_naive",
+      "model_used": "seasonal_naive",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 333466.6666666667,
       "rmse": 333669.7768752813,
@@ -148,6 +178,9 @@
     {
       "origin": "2024-12-01 00:00:00",
       "method": "drift",
+      "requested_method": "drift",
+      "model_used": "drift",
+      "fit_status": "valid",
       "horizon": 3,
       "mae": 105949.52380952379,
       "rmse": 124282.37916707488,
@@ -156,11 +189,14 @@
     {
       "origin": "2024-12-01 00:00:00",
       "method": "holt_winters",
+      "requested_method": "holt_winters",
+      "model_used": "drift",
+      "fit_status": "fallback_nonconverged",
       "horizon": 3,
-      "mae": 88388.72275414628,
-      "rmse": 97033.7464192226,
+      "mae": 105949.52380952379,
+      "rmse": 124282.37916707488,
       "coverage_95": 0.3333333333333333
     }
   ],
-  "interpretation": "selected logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"
+  "interpretation": "signed standardized logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"
 }
