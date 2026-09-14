@@ -1,0 +1,166 @@
+{
+  "data_contract": {
+    "snapshot_date": "account state date",
+    "observation_window": "features describe behavior available by snapshot_date",
+    "future_horizon_days": 90,
+    "synthetic": true
+  },
+  "temporal_split": {
+    "train_end": "2025-04-19",
+    "validation_end": "2026-01-24",
+    "test_start": "2026-01-25",
+    "rows": [
+      840,
+      280,
+      280
+    ]
+  },
+  "classification": {
+    "baseline_prevalence": {
+      "prevalence": 0.225,
+      "roc_auc": 0.5,
+      "pr_auc": 0.225,
+      "brier": 0.17442602040816327
+    },
+    "logistic_regression": {
+      "prevalence": 0.225,
+      "roc_auc": 0.7956989247311828,
+      "pr_auc": 0.5897085301948518,
+      "brier": 0.18261797662094606
+    },
+    "validation": {
+      "baseline_prevalence": {
+        "prevalence": 0.25357142857142856,
+        "roc_auc": 0.5,
+        "pr_auc": 0.25357142857142856,
+        "brier": 0.1905484693877551
+      },
+      "logistic_regression": {
+        "prevalence": 0.25357142857142856,
+        "roc_auc": 0.8431835029314644,
+        "pr_auc": 0.6771403154153398,
+        "brier": 0.16551915473042322
+      }
+    }
+  },
+  "uncertainty_95pct": {
+    "roc_auc": {
+      "low_2.5": 0.7204466727998126,
+      "high_97.5": 0.852401485687962
+    },
+    "pr_auc": {
+      "low_2.5": 0.46700325765282885,
+      "high_97.5": 0.7027257019748901
+    },
+    "brier": {
+      "low_2.5": 0.1597922984561952,
+      "high_97.5": 0.20663548434545792
+    }
+  },
+  "ranking": {
+    "top_decile_precision": 0.6785714285714286,
+    "base_rate": 0.225,
+    "top_decile_capture": 0.30158730158730157
+  },
+  "forecast_holdout": [
+    {
+      "method": "seasonal_naive",
+      "horizon": 6,
+      "mae": 399850.0,
+      "rmse": 406718.913993436,
+      "mape": 0.4431038371276164,
+      "coverage_95": 0.0
+    },
+    {
+      "method": "drift",
+      "horizon": 6,
+      "mae": 223986.66666666666,
+      "rmse": 266515.29040384834,
+      "mape": 0.22590677474185003,
+      "coverage_95": 0.16666666666666666
+    },
+    {
+      "method": "holt_winters",
+      "horizon": 6,
+      "mae": 172505.65922206055,
+      "rmse": 200677.61122242233,
+      "mape": 0.17615665491137286,
+      "coverage_95": 0.16666666666666666
+    }
+  ],
+  "forecast_rolling_origin": [
+    {
+      "origin": "2023-12-01 00:00:00",
+      "method": "seasonal_naive",
+      "horizon": 3,
+      "mae": 186166.66666666666,
+      "rmse": 190952.42863079798,
+      "coverage_95": 0.0
+    },
+    {
+      "origin": "2023-12-01 00:00:00",
+      "method": "drift",
+      "horizon": 3,
+      "mae": 96017.39130434782,
+      "rmse": 112461.93715826161,
+      "coverage_95": 0.3333333333333333
+    },
+    {
+      "origin": "2023-12-01 00:00:00",
+      "method": "holt_winters",
+      "horizon": 3,
+      "mae": 59920.43849773309,
+      "rmse": 74525.82771346561,
+      "coverage_95": 0.3333333333333333
+    },
+    {
+      "origin": "2024-06-01 00:00:00",
+      "method": "seasonal_naive",
+      "horizon": 3,
+      "mae": 269733.3333333333,
+      "rmse": 271638.4484322252,
+      "coverage_95": 0.0
+    },
+    {
+      "origin": "2024-06-01 00:00:00",
+      "method": "drift",
+      "horizon": 3,
+      "mae": 69544.82758620688,
+      "rmse": 78482.13567617348,
+      "coverage_95": 0.3333333333333333
+    },
+    {
+      "origin": "2024-06-01 00:00:00",
+      "method": "holt_winters",
+      "horizon": 3,
+      "mae": 81423.67329604295,
+      "rmse": 92903.1790483971,
+      "coverage_95": 0.3333333333333333
+    },
+    {
+      "origin": "2024-12-01 00:00:00",
+      "method": "seasonal_naive",
+      "horizon": 3,
+      "mae": 333466.6666666667,
+      "rmse": 333669.7768752813,
+      "coverage_95": 0.0
+    },
+    {
+      "origin": "2024-12-01 00:00:00",
+      "method": "drift",
+      "horizon": 3,
+      "mae": 105949.52380952379,
+      "rmse": 124282.37916707488,
+      "coverage_95": 0.3333333333333333
+    },
+    {
+      "origin": "2024-12-01 00:00:00",
+      "method": "holt_winters",
+      "horizon": 3,
+      "mae": 88388.72275414628,
+      "rmse": 97033.7464192226,
+      "coverage_95": 0.3333333333333333
+    }
+  ],
+  "interpretation": "selected logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"
+}

@@ -68,6 +68,9 @@ churned = (RNG.random(N) < churn_prob).astype(int)
 
 accounts = pd.DataFrame({
     "account_id": [f"ACCT{1000+i}" for i in range(N)],
+    # Each row is a synthetic account snapshot.  Features describe the state
+    # at snapshot_date; churned is the outcome in the following 90 days.
+    "snapshot_date": pd.date_range("2023-01-01", periods=N, freq="D"),
     "region": region,
     "specialty": specialty,
     "account_type": acct_type,
@@ -81,6 +84,7 @@ accounts = pd.DataFrame({
     "avg_order_value": avg_order_value,
     "annual_revenue": monetary,
     "days_since_last_order": recency_days,
+    "churn_horizon_days": 90,
     "churned": churned,
 })
 accounts.to_csv("data/accounts.csv", index=False)
