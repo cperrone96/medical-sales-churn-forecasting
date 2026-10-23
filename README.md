@@ -38,7 +38,7 @@ The selected model cuts holdout error by more than two thirds against the best b
 - **Known-truth benchmark.** Since the generator's churn model is known, its true probabilities give an upper bound on achievable performance, and fitted coefficients can be checked against the true ones.
 - **Log-scale forecasting.** Revenue compounds by a percentage each month and its seasonal swing scales with its level, so ETS, SARIMA and a trend + Fourier harmonic regression are fit to log revenue. Additive Holt-Winters on the raw series, used in an earlier version, failed to converge; the same model on log revenue converges.
 - **Rolling-origin backtest for model selection.** Seven origins, each forecasting six months ahead within the first 36 months. The lowest-MAPE method among those whose fits all converged is selected, then evaluated once on the final six months.
-- **Honest uncertainty.** Horizon-specific 95% prediction intervals for every method (analytic intervals for the naive baselines) with empirical coverage, and paired bootstrap intervals for the churn model comparison.
+- **Uncertainty quantification.** Horizon-specific 95% prediction intervals for every method (analytic intervals for the naive baselines) with empirical coverage, and paired bootstrap intervals for the churn model comparison.
 
 ## Data
 
