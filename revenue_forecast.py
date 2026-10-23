@@ -65,11 +65,16 @@ def _drift(history: pd.Series, horizon: int) -> Forecast:
 
 
 def _ets_log(history: pd.Series, horizon: int, damped: bool = False) -> Forecast:
-    model = ETSModel(np.log(history), error="add", trend="add", damped_trend=damped, seasonal="add", seasonal_periods=SEASON)
+    model = ETSModel(
+        np.log(history), error="add", trend="add", damped_trend=damped, seasonal="add", seasonal_periods=SEASON
+    )
     fit = model.fit(disp=False)
     frame = fit.get_prediction(start=len(history), end=len(history) + horizon - 1).summary_frame(alpha=0.05)
     return Forecast(
-        np.exp(frame["mean"].to_numpy()), np.exp(frame["pi_lower"].to_numpy()), np.exp(frame["pi_upper"].to_numpy()), bool(fit.mle_retvals.get("converged", False))
+        np.exp(frame["mean"].to_numpy()),
+        np.exp(frame["pi_lower"].to_numpy()),
+        np.exp(frame["pi_upper"].to_numpy()),
+        bool(fit.mle_retvals.get("converged", False)),
     )
 
 
@@ -77,7 +82,12 @@ def _sarima_log(history: pd.Series, horizon: int) -> Forecast:
     fit = SARIMAX(np.log(history), order=(0, 1, 1), seasonal_order=(0, 1, 1, SEASON)).fit(disp=False)
     pred = fit.get_forecast(horizon)
     ci = pred.conf_int(alpha=0.05).to_numpy()
-    return Forecast(np.exp(pred.predicted_mean.to_numpy()), np.exp(ci[:, 0]), np.exp(ci[:, 1]), bool(fit.mle_retvals.get("converged", False)))
+    return Forecast(
+        np.exp(pred.predicted_mean.to_numpy()),
+        np.exp(ci[:, 0]),
+        np.exp(ci[:, 1]),
+        bool(fit.mle_retvals.get("converged", False)),
+    )
 
 
 def _fourier_design(t: np.ndarray, months: np.ndarray, harmonics: int = 2) -> np.ndarray:
@@ -93,7 +103,11 @@ def _trend_fourier_log(history: pd.Series, horizon: int) -> Forecast:
     X = _fourier_design(np.arange(n + horizon), months)
     fit = sm.OLS(np.log(history.to_numpy()), X[:n]).fit()
     frame = fit.get_prediction(X[n:]).summary_frame(alpha=0.05)
-    return Forecast(np.exp(frame["mean"].to_numpy()), np.exp(frame["obs_ci_lower"].to_numpy()), np.exp(frame["obs_ci_upper"].to_numpy()))
+    return Forecast(
+        np.exp(frame["mean"].to_numpy()),
+        np.exp(frame["obs_ci_lower"].to_numpy()),
+        np.exp(frame["obs_ci_upper"].to_numpy()),
+    )
 
 
 METHODS: dict[str, Callable[[pd.Series, int], Forecast]] = {
@@ -120,7 +134,9 @@ def forecast(history: pd.Series, horizon: int, method: str) -> Forecast:
     return result
 
 
-def rolling_origin(series: pd.Series, origins: Sequence[int], horizon: int, methods: Sequence[str] = tuple(METHODS)) -> pd.DataFrame:
+def rolling_origin(
+    series: pd.Series, origins: Sequence[int], horizon: int, methods: Sequence[str] = tuple(METHODS)
+) -> pd.DataFrame:
     """Forecasts from each origin (number of months of history), one row per step."""
     rows = []
     for origin in origins:
@@ -155,7 +171,11 @@ def score(predictions: pd.DataFrame) -> pd.DataFrame:
         covered=lambda d: (d.actual >= d.lower_95) & (d.actual <= d.upper_95),
     )
     out = frame.groupby("method", sort=False).agg(
-        mape=("ape", "mean"), rmse=("sq", lambda s: float(np.sqrt(s.mean()))), coverage_95=("covered", "mean"), all_fits_converged=("converged", "all"), n_forecasts=("ape", "size")
+        mape=("ape", "mean"),
+        rmse=("sq", lambda s: float(np.sqrt(s.mean()))),
+        coverage_95=("covered", "mean"),
+        all_fits_converged=("converged", "all"),
+        n_forecasts=("ape", "size"),
     )
     return out.reset_index()
 
@@ -175,12 +195,23 @@ def run_revenue(revenue: pd.Series, holdout: int = 6, horizon: int = 6, first_or
 
     future = forecast(revenue, horizon, selected)
     future_index = pd.date_range(revenue.index[-1] + pd.offsets.MonthBegin(1), periods=horizon, freq="MS")
-    forward = pd.DataFrame({"month": future_index.strftime("%Y-%m"), "forecast": future.mean, "lower_95": future.lower, "upper_95": future.upper})
+    forward = pd.DataFrame(
+        {
+            "month": future_index.strftime("%Y-%m"),
+            "forecast": future.mean,
+            "lower_95": future.lower,
+            "upper_95": future.upper,
+        }
+    )
 
     best_baseline = holdout_scores.loc[holdout_scores.method.isin(BASELINES)].sort_values("mape").iloc[0]
     sel_holdout = holdout_scores.set_index("method").loc[selected]
     summary = {
-        "series": {"months": len(revenue), "first_month": revenue.index[0].strftime("%Y-%m"), "last_month": revenue.index[-1].strftime("%Y-%m")},
+        "series": {
+            "months": len(revenue),
+            "first_month": revenue.index[0].strftime("%Y-%m"),
+            "last_month": revenue.index[-1].strftime("%Y-%m"),
+        },
         "design": {
             "holdout_months": holdout,
             "backtest_window": [development.index[0].strftime("%Y-%m"), development.index[-1].strftime("%Y-%m")],

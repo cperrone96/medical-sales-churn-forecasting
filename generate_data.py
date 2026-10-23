@@ -47,7 +47,9 @@ CHURN_COEFFICIENTS: dict[str, tuple[float, float]] = {
 
 def true_churn_probability(accounts: pd.DataFrame) -> np.ndarray:
     """Probability of churn under the generator's logistic model."""
-    z = CHURN_INTERCEPT + sum(coef * (accounts[col].to_numpy() - center) for col, (coef, center) in CHURN_COEFFICIENTS.items())
+    z = CHURN_INTERCEPT + sum(
+        coef * (accounts[col].to_numpy() - center) for col, (coef, center) in CHURN_COEFFICIENTS.items()
+    )
     return 1 / (1 + np.exp(-z))
 
 
@@ -100,7 +102,10 @@ def generate_revenue(rng: np.random.Generator) -> pd.DataFrame:
     return pd.DataFrame({"month": months.strftime("%Y-%m-01"), "revenue": (trend * season * noise).round(-2)})
 
 
-def main(out_dir: Path = Path(__file__).resolve().parent / "data") -> None:
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+def main(out_dir: Path = DATA_DIR) -> None:
     rng = np.random.default_rng(SEED)
     out_dir.mkdir(parents=True, exist_ok=True)
     accounts = generate_accounts(rng)
@@ -108,7 +113,9 @@ def main(out_dir: Path = Path(__file__).resolve().parent / "data") -> None:
     accounts.to_csv(out_dir / "accounts.csv", index=False)
     revenue.to_csv(out_dir / "monthly_revenue.csv", index=False)
     print(f"accounts.csv: {len(accounts)} rows, churn rate {accounts['churned'].mean():.1%}")
-    print(f"monthly_revenue.csv: {len(revenue)} months, ${revenue['revenue'].iloc[0]:,.0f} to ${revenue['revenue'].iloc[-1]:,.0f}")
+    print(
+        f"monthly_revenue.csv: {len(revenue)} months, ${revenue['revenue'].iloc[0]:,.0f} to ${revenue['revenue'].iloc[-1]:,.0f}"
+    )
 
 
 if __name__ == "__main__":

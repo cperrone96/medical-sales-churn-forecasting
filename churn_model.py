@@ -36,7 +36,9 @@ def feature_columns(accounts: pd.DataFrame) -> list[str]:
     return [c for c in accounts.columns if c not in NON_FEATURES]
 
 
-def temporal_split(accounts: pd.DataFrame, embargo_days: int | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def temporal_split(
+    accounts: pd.DataFrame, embargo_days: int | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Chronological 60/20/20 split by snapshot date with a label embargo.
 
     A snapshot's label is only known ``churn_horizon_days`` after the
@@ -56,14 +58,19 @@ def temporal_split(accounts: pd.DataFrame, embargo_days: int | None = None) -> t
 
 def build_logistic(features: Sequence[str], C: float) -> Pipeline:
     numeric = [c for c in features if c not in CATEGORICAL]
-    prep = ColumnTransformer([("num", StandardScaler(), numeric), ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL)])
+    prep = ColumnTransformer(
+        [("num", StandardScaler(), numeric), ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL)]
+    )
     return Pipeline([("preprocess", prep), ("model", LogisticRegression(C=C, max_iter=1000))])
 
 
 def build_boosting(features: Sequence[str], learning_rate: float, max_iter: int, max_leaf_nodes: int) -> Pipeline:
     numeric = [c for c in features if c not in CATEGORICAL]
     prep = ColumnTransformer(
-        [("num", "passthrough", numeric), ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan), CATEGORICAL)]
+        [
+            ("num", "passthrough", numeric),
+            ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan), CATEGORICAL),
+        ]
     )
     model = HistGradientBoostingClassifier(
         learning_rate=learning_rate,
@@ -92,20 +99,34 @@ def top_decile(y: Iterable[int], p: Iterable[float]) -> dict[str, float]:
     y, p = np.asarray(y), np.asarray(p)
     flagged = np.argsort(-p, kind="stable")[: max(1, len(y) // 10)]
     precision = float(y[flagged].mean())
-    return {"precision": precision, "capture": float(y[flagged].sum() / max(y.sum(), 1)), "lift": precision / float(y.mean())}
+    return {
+        "precision": precision,
+        "capture": float(y[flagged].sum() / max(y.sum(), 1)),
+        "lift": precision / float(y.mean()),
+    }
 
 
 def calibration_table(y: Iterable[int], p: Iterable[float], n_bins: int = 5) -> pd.DataFrame:
     """Mean predicted risk vs observed churn in equal-count bins."""
     observed, predicted = calibration_curve(np.asarray(y), np.asarray(p), n_bins=n_bins, strategy="quantile")
-    return pd.DataFrame({"bin": np.arange(1, len(predicted) + 1), "mean_predicted": predicted, "observed_rate": observed})
+    return pd.DataFrame(
+        {"bin": np.arange(1, len(predicted) + 1), "mean_predicted": predicted, "observed_rate": observed}
+    )
 
 
-def bootstrap(y: Iterable[int], predictions: dict[str, np.ndarray], paired: tuple[str, str], n_boot: int = N_BOOT, seed: int = RANDOM_STATE) -> dict:
+def bootstrap(
+    y: Iterable[int],
+    predictions: dict[str, np.ndarray],
+    paired: tuple[str, str],
+    n_boot: int = N_BOOT,
+    seed: int = RANDOM_STATE,
+) -> dict:
     """Account-level percentile bootstrap; the AUC difference is paired."""
     y = np.asarray(y)
     rng = np.random.default_rng(seed)
-    draws: dict[str, dict[str, list[float]]] = {name: {"roc_auc": [], "pr_auc": [], "brier": [], "top_decile_precision": []} for name in predictions}
+    draws: dict[str, dict[str, list[float]]] = {
+        name: {"roc_auc": [], "pr_auc": [], "brier": [], "top_decile_precision": []} for name in predictions
+    }
     diffs = []
     for _ in range(n_boot):
         idx = rng.integers(0, len(y), len(y))
@@ -144,9 +165,19 @@ def coefficient_recovery(pipe: Pipeline, train: pd.DataFrame) -> pd.DataFrame:
         true = 0.0
         if kind == "num" and feature in CHURN_COEFFICIENTS:
             true = CHURN_COEFFICIENTS[feature][0] * float(train[feature].std(ddof=0))
-        rows.append({"encoded_feature": feature, "feature_type": "numeric" if kind == "num" else "categorical", "fitted_coefficient_per_sd": float(coef), "true_coefficient_per_sd": true, "is_true_driver": kind == "num" and feature in CHURN_COEFFICIENTS})
+        rows.append(
+            {
+                "encoded_feature": feature,
+                "feature_type": "numeric" if kind == "num" else "categorical",
+                "fitted_coefficient_per_sd": float(coef),
+                "true_coefficient_per_sd": true,
+                "is_true_driver": kind == "num" and feature in CHURN_COEFFICIENTS,
+            }
+        )
     table = pd.DataFrame(rows)
-    return table.reindex(table["fitted_coefficient_per_sd"].abs().sort_values(ascending=False).index).reset_index(drop=True)
+    return table.reindex(table["fitted_coefficient_per_sd"].abs().sort_values(ascending=False).index).reset_index(
+        drop=True
+    )
 
 
 def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
@@ -199,8 +230,12 @@ def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
         "uncertainty_95pct": uncertainty,
         "coefficient_recovery": {
             "true_drivers": int(len(drivers)),
-            "true_drivers_with_correct_sign": int((np.sign(drivers.fitted_coefficient_per_sd) == np.sign(drivers.true_coefficient_per_sd)).sum()),
-            "correlation_fitted_vs_true": float(np.corrcoef(recovery.fitted_coefficient_per_sd, recovery.true_coefficient_per_sd)[0, 1]),
+            "true_drivers_with_correct_sign": int(
+                (np.sign(drivers.fitted_coefficient_per_sd) == np.sign(drivers.true_coefficient_per_sd)).sum()
+            ),
+            "correlation_fitted_vs_true": float(
+                np.corrcoef(recovery.fitted_coefficient_per_sd, recovery.true_coefficient_per_sd)[0, 1]
+            ),
         },
     }
     return {
@@ -208,5 +243,12 @@ def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
         "model_selection": pd.DataFrame(selection_rows),
         "calibration": calibration,
         "coefficients": recovery,
-        "test_predictions": pd.DataFrame({"account_id": test.account_id.to_numpy(), "churned": y_test, **test_pred, "oracle_true_probability": oracle}),
+        "test_predictions": pd.DataFrame(
+            {
+                "account_id": test.account_id.to_numpy(),
+                "churned": y_test,
+                **test_pred,
+                "oracle_true_probability": oracle,
+            }
+        ),
     }
