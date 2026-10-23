@@ -1,26 +1,26 @@
-encoded_feature,coefficient,coefficient_abs,standardized
-num__days_since_last_order,0.8851940244990868,0.8851940244990868,True
-num__engagement_score,-0.5516136659064044,0.5516136659064044,True
-num__rep_tenure_months,-0.4873493608123071,0.4873493608123071,True
-num__support_tickets_qtr,0.34719268669955183,0.34719268669955183,True
-cat__region_Midwest,-0.34708579817845037,0.34708579817845037,True
-cat__account_type_Private Practice,0.33595501448715154,0.33595501448715154,True
-num__onboarding_score,-0.3309839624738004,0.3309839624738004,True
-num__avg_order_value,0.3036999969565089,0.3036999969565089,True
-cat__account_type_Surgery Center,-0.2906829555861592,0.2906829555861592,True
-cat__region_Northeast,0.27391758452235876,0.27391758452235876,True
-num__annual_revenue,-0.23514079994351503,0.23514079994351503,True
-num__avg_discount_pct,0.20399348782021523,0.20399348782021523,True
-cat__specialty_Cardiology,0.19385953449423426,0.19385953449423426,True
-num__order_frequency_yr,-0.19112235092549734,0.19112235092549734,True
-cat__specialty_Orthopedics,-0.18818781144669092,0.18818781144669092,True
-cat__specialty_Oncology,0.1464305109160366,0.1464305109160366,True
-cat__specialty_Dermatology,-0.09665232702177143,0.09665232702177143,True
-cat__region_West,0.09064777536764639,0.09064777536764639,True
-num__product_lines,-0.08217979144935651,0.08217979144935651,True
-cat__specialty_General Surgery,-0.05787017266348407,0.05787017266348407,True
-cat__account_type_Clinic,-0.04317720837875517,0.04317720837875517,True
-cat__region_Southeast,-0.03459419808137254,0.03459419808137254,True
-cat__region_Southwest,0.01704742875899838,0.01704742875899838,True
-cat__specialty_Neurology,0.0023530581108575244,0.0023530581108575244,True
-cat__account_type_Hospital,-0.002162058133057161,0.002162058133057161,True
+encoded_feature,feature_type,fitted_coefficient_per_sd,true_coefficient_per_sd,is_true_driver
+days_since_last_order,numeric,0.8235267264513003,0.8570666040240592,True
+engagement_score,numeric,-0.5047752220912495,-0.522711766081461,True
+rep_tenure_months,numeric,-0.488821001400215,-0.5241375166881301,True
+support_tickets_qtr,numeric,0.33357820212315203,0.26187079562257415,True
+onboarding_score,numeric,-0.29277013561830734,-0.2417823344930082,True
+avg_order_value,numeric,0.2527594232115256,0.0,False
+annual_revenue,numeric,-0.2177224180536401,0.0,False
+account_type_Private Practice,categorical,0.21518484725263862,0.0,False
+account_type_Surgery Center,categorical,-0.20095032261127718,0.0,False
+region_Northeast,categorical,0.19610429510009073,0.0,False
+specialty_Oncology,categorical,0.1915599540156574,0.0,False
+specialty_General Surgery,categorical,-0.1796512434282993,0.0,False
+avg_discount_pct,numeric,0.16156542092872084,0.12470214947626204,True
+region_Southwest,categorical,-0.15255044172064147,0.0,False
+order_frequency_yr,numeric,-0.14740325929619588,-0.23472583004196385,True
+specialty_Neurology,categorical,0.1189239064406533,0.0,False
+specialty_Dermatology,categorical,-0.09348777532729989,0.0,False
+region_West,categorical,0.08496563181454153,0.0,False
+specialty_Orthopedics,categorical,-0.08345664192864694,0.0,False
+product_lines,numeric,-0.0803321082466083,0.0,False
+region_Midwest,categorical,-0.07047908755518807,0.0,False
+region_Southeast,categorical,-0.05785748238101975,0.0,False
+specialty_Cardiology,categorical,0.04629471548571842,0.0,False
+account_type_Hospital,categorical,-0.04321344071915588,0.0,False
+account_type_Clinic,categorical,0.029161831335577617,0.0,False

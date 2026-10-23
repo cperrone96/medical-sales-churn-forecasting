@@ -1,4 +1,8 @@
-"""Deterministic temporal churn and revenue-forecasting analysis."""
+"""Run the churn and revenue analyses and write every reported number and figure.
+
+Usage:  python analysis.py
+Reads ``data/`` (written by generate_data.py); writes ``metrics/`` and ``figures/``.
+"""
 
 from __future__ import annotations
 
@@ -7,127 +11,110 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.calibration import calibration_curve
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, brier_score_loss, mean_absolute_error, mean_squared_error, roc_auc_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.metrics import roc_auc_score, roc_curve
 
-RANDOM_STATE = 42
+from churn_model import run_churn
+from revenue_forecast import BASELINES, run_revenue
 
-
-def temporal_split(df: pd.DataFrame):
-    dates = pd.to_datetime(df["snapshot_date"])
-    q1, q2 = dates.quantile([.60, .80])
-    return df.loc[dates <= q1].copy(), df.loc[(dates > q1) & (dates <= q2)].copy(), df.loc[dates > q2].copy()
-
-
-def churn_pipeline(X: pd.DataFrame):
-    cat = [c for c in X if X[c].dtype == "object"]
-    num = [c for c in X if c not in cat]
-    prep = ColumnTransformer([
-        ("num", Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), num),
-        ("cat", Pipeline([("impute", SimpleImputer(strategy="most_frequent")), ("onehot", OneHotEncoder(handle_unknown="ignore"))]), cat),
-    ])
-    return Pipeline([("preprocess", prep), ("model", LogisticRegression(max_iter=500, class_weight="balanced", random_state=RANDOM_STATE))])
+ROOT = Path(__file__).resolve().parent
+LABELS = {
+    "logistic_regression": "Logistic regression",
+    "gradient_boosting": "Gradient boosting",
+    "oracle_true_probability": "True generator probability",
+    "seasonal_naive": "Seasonal naive",
+    "drift": "Drift",
+    "ets_log": "ETS(A,A,A) on log",
+    "ets_damped_log": "Damped ETS on log",
+    "sarima_log": "SARIMA airline on log",
+    "trend_fourier_log": "Trend + Fourier on log",
+}
 
 
-def classification_metrics(y, p):
-    return {"prevalence": float(np.mean(y)), "roc_auc": float(roc_auc_score(y, p)), "pr_auc": float(average_precision_score(y, p)), "brier": float(brier_score_loss(y, p))}
+def load_revenue(path: Path) -> pd.Series:
+    return pd.read_csv(path, parse_dates=["month"]).set_index("month")["revenue"].sort_index()
 
 
-def bootstrap_ci(y, p, n=200):
-    rng = np.random.default_rng(RANDOM_STATE)
-    vals = []
-    for _ in range(n):
-        idx = rng.integers(0, len(y), len(y))
-        if len(np.unique(y[idx])) > 1:
-            vals.append(classification_metrics(y[idx], p[idx]))
-    return {k: {"low_2.5": float(np.quantile([v[k] for v in vals], .025)), "high_97.5": float(np.quantile([v[k] for v in vals], .975))} for k in ("roc_auc", "pr_auc", "brier")}
+def plot_churn(predictions: pd.DataFrame, coefficients: pd.DataFrame, path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, (ax_roc, ax_coef) = plt.subplots(1, 2, figsize=(11, 4.6), gridspec_kw={"width_ratios": [1, 1.15]})
+    styles = {"logistic_regression": ("#2a6fb0", "-"), "gradient_boosting": ("#d1495b", "-"), "oracle_true_probability": ("#555555", ":")}
+    y = predictions["churned"].to_numpy()
+    for name, (color, ls) in styles.items():
+        fpr, tpr, _ = roc_curve(y, predictions[name])
+        ax_roc.plot(fpr, tpr, ls, color=color, lw=2, label=f"{LABELS[name]} ({roc_auc_score(y, predictions[name]):.3f})")
+    ax_roc.plot([0, 1], [0, 1], "--", color="#aaaaaa", lw=1, label="Prevalence baseline (0.500)")
+    ax_roc.set(xlabel="False positive rate", ylabel="True positive rate", title="Churn ROC, test period (AUC)")
+    ax_roc.legend(loc="lower right", frameon=False, fontsize=9)
+
+    numeric = coefficients.loc[coefficients.feature_type == "numeric"].sort_values(["true_coefficient_per_sd", "fitted_coefficient_per_sd"])
+    pos = np.arange(len(numeric))
+    ax_coef.barh(pos - 0.2, numeric.true_coefficient_per_sd, height=0.4, color="#bbbbbb", label="True (generator)")
+    ax_coef.barh(pos + 0.2, numeric.fitted_coefficient_per_sd, height=0.4, color="#2a6fb0", label="Fitted (logistic regression)")
+    ax_coef.set_yticks(pos, numeric.encoded_feature)
+    ax_coef.axvline(0, color="#333333", lw=0.8)
+    ax_coef.set(xlabel="Log-odds change per 1 SD", title="Coefficient recovery, numeric features")
+    ax_coef.legend(frameon=False, fontsize=9, loc="lower right")
+    for ax in (ax_roc, ax_coef):
+        ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
-def _forecast_predictions(history: pd.Series, horizon: int, method: str):
-    def interval(pred, residual, requested, used, status):
-        spread = float(np.std(residual, ddof=1)) if len(residual) > 1 else 0.0
-        return np.asarray(pred), np.asarray(pred) - 1.96 * spread, np.asarray(pred) + 1.96 * spread, {"requested_method": requested, "model_used": used, "fit_status": status}
+def plot_revenue(revenue: pd.Series, holdout: pd.DataFrame, forward: pd.DataFrame, selected: str, path: Path) -> None:
+    import matplotlib
 
-    if method == "seasonal_naive":
-        if len(history) < 12:
-            pred = np.repeat(history.iloc[-1], horizon)
-        else:
-            pred = np.resize(history.iloc[-12:].to_numpy(), horizon)
-        residual = history.iloc[12:].to_numpy() - history.iloc[:-12].to_numpy() if len(history) > 12 else np.diff(history.to_numpy())
-        return interval(pred, residual, method, method, "valid")
-    elif method == "drift":
-        slope = (history.iloc[-1] - history.iloc[0]) / max(len(history) - 1, 1)
-        pred = history.iloc[-1] + slope * np.arange(1, horizon + 1)
-        residual = np.diff(history.to_numpy())
-        return interval(pred, residual, method, method, "valid")
-    else:
-        import warnings
-        from statsmodels.tools.sm_exceptions import ConvergenceWarning
-        from statsmodels.tsa.holtwinters import ExponentialSmoothing
-        seasonal = 12 if len(history) >= 24 else None
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            fit = ExponentialSmoothing(history, trend="add", seasonal="add" if seasonal else None, seasonal_periods=seasonal, initialization_method="estimated").fit(optimized=True)
-        converged = bool(getattr(fit, "mle_retvals", {}).get("converged", True))
-        warned = any(issubclass(w.category, ConvergenceWarning) for w in caught)
-        if not converged or warned:
-            # Never present a failed optimizer result as a valid Holt-Winters
-            # forecast. Drift is a deterministic, explicitly labeled fallback.
-            pred, low, high, _ = _forecast_predictions(history, horizon, "drift")
-            return pred, low, high, {"requested_method": method, "model_used": "drift", "fit_status": "fallback_nonconverged"}
-        pred = fit.forecast(horizon).to_numpy()
-        residual = np.asarray(fit.resid)
-        return interval(pred, residual, method, method, "valid")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(11, 4.6))
+    ax.plot(revenue.index, revenue / 1e6, color="#222222", lw=2, label="Actual revenue")
+    months = pd.to_datetime(holdout.loc[holdout.method == selected, "month"])
+    sel = holdout.loc[holdout.method == selected]
+    ax.fill_between(months, sel.lower_95 / 1e6, sel.upper_95 / 1e6, color="#d1495b", alpha=0.18, lw=0)
+    ax.plot(months, sel.forecast / 1e6, "o-", color="#d1495b", lw=2, label=f"{LABELS[selected]} (selected), holdout forecast + 95% PI")
+    for name, color in zip(BASELINES, ("#7a9e3a", "#e09f3e")):
+        part = holdout.loc[holdout.method == name]
+        ax.plot(months, part.forecast / 1e6, "s--", color=color, lw=1.5, ms=4, label=f"{LABELS[name]}, holdout forecast")
+    fmonths = pd.to_datetime(forward.month)
+    ax.fill_between(fmonths, forward.lower_95 / 1e6, forward.upper_95 / 1e6, color="#2a6fb0", alpha=0.18, lw=0)
+    ax.plot(fmonths, forward.forecast / 1e6, "o-", color="#2a6fb0", lw=2, label="Next 6 months, refit on all data + 95% PI")
+    ax.axvline(months.iloc[0] - pd.Timedelta(days=15), color="#999999", lw=1, ls=":")
+    ax.set(ylabel="Monthly revenue ($M)", title="Revenue forecast: 6-month holdout and forward forecast")
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
-def rolling_origin(revenue: pd.Series, origins=(24, 30, 36), horizon=3):
-    rows = []
-    for origin in origins:
-        if origin + horizon > len(revenue):
-            continue
-        history, actual = revenue.iloc[:origin], revenue.iloc[origin:origin + horizon]
-        for method in ("seasonal_naive", "drift", "holt_winters"):
-            pred, low, high, info = _forecast_predictions(history, horizon, method)
-            rows.append({"origin": str(revenue.index[origin - 1]), "method": method, **info, "horizon": horizon, "mae": float(mean_absolute_error(actual, pred)), "rmse": float(mean_squared_error(actual, pred) ** .5), "coverage_95": float(np.mean((actual.to_numpy() >= low) & (actual.to_numpy() <= high)))})
-    return pd.DataFrame(rows)
+def run_analysis(data_dir: Path = ROOT / "data", output_dir: Path = ROOT / "metrics", figure_dir: Path | None = ROOT / "figures") -> dict:
+    data_dir, output_dir = Path(data_dir), Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    accounts = pd.read_csv(data_dir / "accounts.csv", parse_dates=["snapshot_date"])
+    revenue = load_revenue(data_dir / "monthly_revenue.csv")
 
+    churn = run_churn(accounts)
+    churn["model_selection"].to_csv(output_dir / "churn_model_selection.csv", index=False)
+    churn["calibration"].to_csv(output_dir / "churn_calibration.csv", index=False)
+    churn["coefficients"].to_csv(output_dir / "churn_logistic_coefficients.csv", index=False)
 
-def run_analysis(data_dir="data", output_dir="metrics"):
-    data_dir, out = Path(data_dir), Path(output_dir); out.mkdir(exist_ok=True)
-    accounts = pd.read_csv(data_dir / "accounts.csv")
-    required = {"account_id", "snapshot_date", "churn_horizon_days", "churned"}
-    missing = required - set(accounts.columns)
-    if missing:
-        raise ValueError(f"regenerate synthetic data; missing snapshot contract fields: {sorted(missing)}")
-    train, val, test = temporal_split(accounts)
-    excluded = ["account_id", "snapshot_date", "churn_horizon_days", "churned"]
-    features = [c for c in accounts if c not in excluded]
-    model = churn_pipeline(train[features]); model.fit(train[features], train["churned"])
-    p_val, p_test = model.predict_proba(val[features])[:, 1], model.predict_proba(test[features])[:, 1]
-    baseline_val = np.repeat(train.churned.mean(), len(val)); baseline_test = np.repeat(train.churned.mean(), len(test))
-    classification = {"baseline_prevalence": classification_metrics(test.churned.to_numpy(), baseline_test), "logistic_regression": classification_metrics(test.churned.to_numpy(), p_test), "validation": {"baseline_prevalence": classification_metrics(val.churned.to_numpy(), baseline_val), "logistic_regression": classification_metrics(val.churned.to_numpy(), p_val)}}
-    calibration_p, calibration_y = calibration_curve(test.churned, p_test, n_bins=10, strategy="quantile")
-    pd.DataFrame({"predicted_probability": calibration_p, "observed_fraction": calibration_y}).to_csv(out / "churn_calibration.csv", index=False)
-    # A top-decile policy is reported descriptively, not as a guaranteed lift.
-    n = max(1, len(test) // 10); top = np.argsort(-p_test)[:n]
-    ranking = {"top_decile_precision": float(test.churned.iloc[top].mean()), "base_rate": float(test.churned.mean()), "top_decile_capture": float(test.churned.iloc[top].sum() / max(test.churned.sum(), 1))}
-    coef = model.named_steps["model"].coef_[0]; names = model.named_steps["preprocess"].get_feature_names_out()
-    pd.DataFrame({"encoded_feature": names, "coefficient": coef, "coefficient_abs": np.abs(coef), "standardized": True}).sort_values("coefficient_abs", ascending=False).to_csv(out / "churn_logistic_coefficients.csv", index=False)
-    rev = pd.read_csv(data_dir / "monthly_revenue.csv", parse_dates=["month"]).set_index("month")["revenue"].sort_index()
-    holdout = 6; train_rev, test_rev = rev.iloc[:-holdout], rev.iloc[-holdout:]
-    forecasts = []
-    for method in ("seasonal_naive", "drift", "holt_winters"):
-        pred, low, high, info = _forecast_predictions(train_rev, holdout, method)
-        forecasts.append({"method": method, **info, "horizon": holdout, "mae": float(mean_absolute_error(test_rev, pred)), "rmse": float(mean_squared_error(test_rev, pred) ** .5), "mape": float(np.mean(np.abs((test_rev.to_numpy() - pred) / test_rev.to_numpy()))), "coverage_95": float(np.mean((test_rev.to_numpy() >= low) & (test_rev.to_numpy() <= high)))})
-    rolling = rolling_origin(rev)
-    rolling.to_csv(out / "rolling_origin_forecasts.csv", index=False)
-    summary = {"data_contract": {"snapshot_date": "account state date", "observation_window": "features describe behavior available by snapshot_date", "future_horizon_days": 90, "synthetic": True}, "temporal_split": {"train_end": str(train.snapshot_date.max()), "validation_end": str(val.snapshot_date.max()), "test_start": str(test.snapshot_date.min()), "rows": [len(train), len(val), len(test)]}, "classification": classification, "uncertainty_95pct": bootstrap_ci(test.churned.to_numpy(), p_test), "ranking": ranking, "forecast_holdout": forecasts, "forecast_rolling_origin": rolling.to_dict(orient="records"), "interpretation": "signed standardized logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"}
-    (out / "sales_metrics.json").write_text(json.dumps(summary, indent=2) + "\n")
+    rev = run_revenue(revenue)
+    rev["backtest"].to_csv(output_dir / "rolling_origin_forecasts.csv", index=False)
+    rev["holdout"].to_csv(output_dir / "revenue_holdout_forecasts.csv", index=False)
+    rev["forward"].to_csv(output_dir / "revenue_forward_forecast.csv", index=False)
+
+    summary = {"data": {"synthetic": True, "accounts": len(accounts), "churn_rate": float(accounts["churned"].mean())}, "churn": churn["summary"], "revenue": rev["summary"]}
+    (output_dir / "sales_metrics.json").write_text(json.dumps(summary, indent=2) + "\n")
+    if figure_dir is not None:
+        figure_dir = Path(figure_dir)
+        figure_dir.mkdir(parents=True, exist_ok=True)
+        plot_churn(churn["test_predictions"], churn["coefficients"], figure_dir / "roc_curves.png")
+        plot_revenue(revenue, rev["holdout"], rev["forward"], rev["summary"]["selected_method"], figure_dir / "revenue_forecast.png")
     return summary
 
 

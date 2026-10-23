@@ -1,202 +1,269 @@
 {
-  "data_contract": {
-    "snapshot_date": "account state date",
-    "observation_window": "features describe behavior available by snapshot_date",
-    "future_horizon_days": 90,
-    "synthetic": true
+  "data": {
+    "synthetic": true,
+    "accounts": 1400,
+    "churn_rate": 0.22642857142857142
   },
-  "temporal_split": {
-    "train_end": "2025-04-19",
-    "validation_end": "2026-01-24",
-    "test_start": "2026-01-25",
-    "rows": [
-      840,
-      280,
-      280
-    ]
-  },
-  "classification": {
-    "baseline_prevalence": {
-      "prevalence": 0.225,
-      "roc_auc": 0.5,
-      "pr_auc": 0.225,
-      "brier": 0.17442602040816327
+  "churn": {
+    "split": {
+      "train_rows": 750,
+      "validation_rows": 280,
+      "test_rows": 280,
+      "train_snapshots": [
+        "2021-01-01 00:00:00",
+        "2023-01-20 00:00:00"
+      ],
+      "validation_snapshots": [
+        "2023-04-21 00:00:00",
+        "2024-01-25 00:00:00"
+      ],
+      "test_snapshots": [
+        "2024-01-26 00:00:00",
+        "2024-10-31 00:00:00"
+      ],
+      "label_embargo_days": 90,
+      "test_churn_rate": 0.225
     },
-    "logistic_regression": {
-      "prevalence": 0.225,
-      "roc_auc": 0.7956989247311828,
-      "pr_auc": 0.5897085301948518,
-      "brier": 0.18261797662094606
-    },
+    "selection_metric": "validation log loss (a proper scoring rule, so it rewards calibrated probabilities as well as ranking)",
     "validation": {
-      "baseline_prevalence": {
-        "prevalence": 0.25357142857142856,
+      "logistic_regression": {
+        "roc_auc": 0.8495855515870342,
+        "pr_auc": 0.6946691912799752,
+        "brier": 0.12746606004018352,
+        "log_loss": 0.40054828038539964
+      },
+      "gradient_boosting": {
+        "roc_auc": 0.8299750657052362,
+        "pr_auc": 0.6581258485438348,
+        "brier": 0.1360942761085386,
+        "log_loss": 0.42130380771108156
+      }
+    },
+    "selected_hyperparameters": {
+      "logistic_regression": {
+        "C": 0.1
+      },
+      "gradient_boosting": {
+        "learning_rate": 0.03,
+        "max_iter": 300,
+        "max_leaf_nodes": 4
+      }
+    },
+    "selected_model": "logistic_regression",
+    "test": {
+      "prevalence_baseline": {
         "roc_auc": 0.5,
-        "pr_auc": 0.25357142857142856,
-        "brier": 0.1905484693877551
+        "pr_auc": 0.225,
+        "brier": 0.17443377777777777,
+        "log_loss": 0.5333351759820599
       },
       "logistic_regression": {
-        "prevalence": 0.25357142857142856,
-        "roc_auc": 0.8431835029314644,
-        "pr_auc": 0.6771403154153398,
-        "brier": 0.16551915473042322
+        "roc_auc": 0.7898471216443567,
+        "pr_auc": 0.5769610328263931,
+        "brier": 0.13597135711565264,
+        "log_loss": 0.4262657697972552
+      },
+      "gradient_boosting": {
+        "roc_auc": 0.7295004023114622,
+        "pr_auc": 0.4832599890447262,
+        "brier": 0.15563171293459455,
+        "log_loss": 0.481131355292938
+      },
+      "oracle_true_probability": {
+        "roc_auc": 0.7918221051861606,
+        "pr_auc": 0.5793283584644121,
+        "brier": 0.13597051524248213,
+        "log_loss": 0.42372589923289244
       }
+    },
+    "top_decile": {
+      "logistic_regression": {
+        "precision": 0.6428571428571429,
+        "capture": 0.2857142857142857,
+        "lift": 2.857142857142857
+      },
+      "gradient_boosting": {
+        "precision": 0.5,
+        "capture": 0.2222222222222222,
+        "lift": 2.2222222222222223
+      },
+      "oracle_true_probability": {
+        "precision": 0.6428571428571429,
+        "capture": 0.2857142857142857,
+        "lift": 2.857142857142857
+      }
+    },
+    "uncertainty_95pct": {
+      "logistic_regression": {
+        "roc_auc": {
+          "low_2.5": 0.7231890860692103,
+          "high_97.5": 0.8509958026587741
+        },
+        "pr_auc": {
+          "low_2.5": 0.45472252998437984,
+          "high_97.5": 0.6939567143320168
+        },
+        "brier": {
+          "low_2.5": 0.11110545633099947,
+          "high_97.5": 0.1626530235559596
+        },
+        "top_decile_precision": {
+          "low_2.5": 0.4642857142857143,
+          "high_97.5": 0.8214285714285714
+        }
+      },
+      "gradient_boosting": {
+        "roc_auc": {
+          "low_2.5": 0.6571726979150269,
+          "high_97.5": 0.7990062608084041
+        },
+        "pr_auc": {
+          "low_2.5": 0.37098008817956474,
+          "high_97.5": 0.6029953299790444
+        },
+        "brier": {
+          "low_2.5": 0.12772894688063052,
+          "high_97.5": 0.18425740277220884
+        },
+        "top_decile_precision": {
+          "low_2.5": 0.32142857142857145,
+          "high_97.5": 0.7142857142857143
+        }
+      },
+      "roc_auc_difference_logistic_regression_minus_gradient_boosting": {
+        "low_2.5": 0.025641844312552512,
+        "high_97.5": 0.09609805599039531
+      },
+      "n_resamples": 2000
+    },
+    "coefficient_recovery": {
+      "true_drivers": 7,
+      "true_drivers_with_correct_sign": 7,
+      "correlation_fitted_vs_true": 0.8810097233934843
     }
   },
-  "uncertainty_95pct": {
-    "roc_auc": {
-      "low_2.5": 0.7204466727998126,
-      "high_97.5": 0.852401485687962
+  "revenue": {
+    "series": {
+      "months": 42,
+      "first_month": "2022-01",
+      "last_month": "2025-06"
     },
-    "pr_auc": {
-      "low_2.5": 0.46700325765282885,
-      "high_97.5": 0.7027257019748901
+    "design": {
+      "holdout_months": 6,
+      "backtest_window": [
+        "2022-01",
+        "2024-12"
+      ],
+      "backtest_origins": 7,
+      "horizon_months": 6,
+      "selection_metric": "mean MAPE across all backtest forecasts, among methods whose fits all converged"
     },
-    "brier": {
-      "low_2.5": 0.1597922984561952,
-      "high_97.5": 0.20663548434545792
-    }
-  },
-  "ranking": {
-    "top_decile_precision": 0.6785714285714286,
-    "base_rate": 0.225,
-    "top_decile_capture": 0.30158730158730157
-  },
-  "forecast_holdout": [
-    {
-      "method": "seasonal_naive",
-      "requested_method": "seasonal_naive",
-      "model_used": "seasonal_naive",
-      "fit_status": "valid",
-      "horizon": 6,
-      "mae": 399850.0,
-      "rmse": 406718.913993436,
-      "mape": 0.4431038371276164,
-      "coverage_95": 0.0
+    "backtest": [
+      {
+        "method": "seasonal_naive",
+        "mape": 0.4249765946340126,
+        "rmse": 255221.33251636426,
+        "coverage_95": 0.0,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      },
+      {
+        "method": "drift",
+        "mape": 0.1879789891105495,
+        "rmse": 130547.46751828596,
+        "coverage_95": 0.5,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      },
+      {
+        "method": "ets_log",
+        "mape": 0.06808658184995717,
+        "rmse": 45571.338470536924,
+        "coverage_95": 0.30952380952380953,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      },
+      {
+        "method": "ets_damped_log",
+        "mape": 0.07591998107333983,
+        "rmse": 52012.09235829324,
+        "coverage_95": 0.5238095238095238,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      },
+      {
+        "method": "sarima_log",
+        "mape": 0.0669850996596255,
+        "rmse": 43760.92545454103,
+        "coverage_95": 0.8095238095238095,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      },
+      {
+        "method": "trend_fourier_log",
+        "mape": 0.06465640046861669,
+        "rmse": 44811.115879831996,
+        "coverage_95": 0.9047619047619048,
+        "all_fits_converged": true,
+        "n_forecasts": 42
+      }
+    ],
+    "selected_method": "trend_fourier_log",
+    "holdout": [
+      {
+        "method": "seasonal_naive",
+        "mape": 0.4431038371276164,
+        "rmse": 406718.913993436,
+        "coverage_95": 0.0,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      },
+      {
+        "method": "drift",
+        "mape": 0.22590677474185003,
+        "rmse": 266515.29040384834,
+        "coverage_95": 0.3333333333333333,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      },
+      {
+        "method": "ets_log",
+        "mape": 0.0551284262478322,
+        "rmse": 67798.78989388834,
+        "coverage_95": 0.8333333333333334,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      },
+      {
+        "method": "ets_damped_log",
+        "mape": 0.051660143279148585,
+        "rmse": 66596.38320640528,
+        "coverage_95": 0.8333333333333334,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      },
+      {
+        "method": "sarima_log",
+        "mape": 0.058535806771980135,
+        "rmse": 62572.026400622155,
+        "coverage_95": 1.0,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      },
+      {
+        "method": "trend_fourier_log",
+        "mape": 0.062028369869716105,
+        "rmse": 75933.06904166765,
+        "coverage_95": 0.8333333333333334,
+        "all_fits_converged": true,
+        "n_forecasts": 6
+      }
+    ],
+    "holdout_selected_vs_best_baseline": {
+      "selected_mape": 0.062028369869716105,
+      "best_baseline": "drift",
+      "best_baseline_mape": 0.22590677474185003
     },
-    {
-      "method": "drift",
-      "requested_method": "drift",
-      "model_used": "drift",
-      "fit_status": "valid",
-      "horizon": 6,
-      "mae": 223986.66666666666,
-      "rmse": 266515.29040384834,
-      "mape": 0.22590677474185003,
-      "coverage_95": 0.16666666666666666
-    },
-    {
-      "method": "holt_winters",
-      "requested_method": "holt_winters",
-      "model_used": "drift",
-      "fit_status": "fallback_nonconverged",
-      "horizon": 6,
-      "mae": 223986.66666666666,
-      "rmse": 266515.29040384834,
-      "mape": 0.22590677474185003,
-      "coverage_95": 0.16666666666666666
-    }
-  ],
-  "forecast_rolling_origin": [
-    {
-      "origin": "2023-12-01 00:00:00",
-      "method": "seasonal_naive",
-      "requested_method": "seasonal_naive",
-      "model_used": "seasonal_naive",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 186166.66666666666,
-      "rmse": 190952.42863079798,
-      "coverage_95": 0.0
-    },
-    {
-      "origin": "2023-12-01 00:00:00",
-      "method": "drift",
-      "requested_method": "drift",
-      "model_used": "drift",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 96017.39130434782,
-      "rmse": 112461.93715826161,
-      "coverage_95": 0.3333333333333333
-    },
-    {
-      "origin": "2023-12-01 00:00:00",
-      "method": "holt_winters",
-      "requested_method": "holt_winters",
-      "model_used": "drift",
-      "fit_status": "fallback_nonconverged",
-      "horizon": 3,
-      "mae": 96017.39130434782,
-      "rmse": 112461.93715826161,
-      "coverage_95": 0.3333333333333333
-    },
-    {
-      "origin": "2024-06-01 00:00:00",
-      "method": "seasonal_naive",
-      "requested_method": "seasonal_naive",
-      "model_used": "seasonal_naive",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 269733.3333333333,
-      "rmse": 271638.4484322252,
-      "coverage_95": 0.0
-    },
-    {
-      "origin": "2024-06-01 00:00:00",
-      "method": "drift",
-      "requested_method": "drift",
-      "model_used": "drift",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 69544.82758620688,
-      "rmse": 78482.13567617348,
-      "coverage_95": 0.3333333333333333
-    },
-    {
-      "origin": "2024-06-01 00:00:00",
-      "method": "holt_winters",
-      "requested_method": "holt_winters",
-      "model_used": "drift",
-      "fit_status": "fallback_nonconverged",
-      "horizon": 3,
-      "mae": 69544.82758620688,
-      "rmse": 78482.13567617348,
-      "coverage_95": 0.3333333333333333
-    },
-    {
-      "origin": "2024-12-01 00:00:00",
-      "method": "seasonal_naive",
-      "requested_method": "seasonal_naive",
-      "model_used": "seasonal_naive",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 333466.6666666667,
-      "rmse": 333669.7768752813,
-      "coverage_95": 0.0
-    },
-    {
-      "origin": "2024-12-01 00:00:00",
-      "method": "drift",
-      "requested_method": "drift",
-      "model_used": "drift",
-      "fit_status": "valid",
-      "horizon": 3,
-      "mae": 105949.52380952379,
-      "rmse": 124282.37916707488,
-      "coverage_95": 0.3333333333333333
-    },
-    {
-      "origin": "2024-12-01 00:00:00",
-      "method": "holt_winters",
-      "requested_method": "holt_winters",
-      "model_used": "drift",
-      "fit_status": "fallback_nonconverged",
-      "horizon": 3,
-      "mae": 105949.52380952379,
-      "rmse": 124282.37916707488,
-      "coverage_95": 0.3333333333333333
-    }
-  ],
-  "interpretation": "signed standardized logistic coefficients are predictive associations; synthetic recovery does not establish real-account validity or causal retention impact"
+    "forward_forecast_converged": true
+  }
 }
