@@ -52,7 +52,7 @@ Left: holdout forecast from the selected model and the forward forecast from a r
 
 ## Recommendation
 
-- **Churn outreach:** give account managers the model's ranked list each period and size the effort to capacity. At the stated assumptions the top 10% returns $5.40 of protected annual revenue per outreach dollar; returns fall to about $1.60 per dollar on the block between the top 30% and top 50%, which only pays if gross margin on retained revenue exceeds roughly 62%. The save rate is the assumption everything hinges on, so measure it with a randomized holdout group in the first outreach cycle before scaling up.
+- **Churn outreach:** give account managers the model's ranked list each period and size the effort to capacity. At the stated assumptions the top 10% returns $5.39 of protected annual revenue per outreach dollar; returns fall to about $1.60 per dollar on the block between the top 30% and top 50%, which only pays if gross margin on retained revenue exceeds roughly 62%. The save rate is the assumption everything hinges on, so measure it with a randomized holdout group in the first outreach cycle before scaling up.
 - **Revenue planning:** plan July to December 2025 on the trend + Fourier forecast, $1.04M to $1.12M per month, with its 95% interval (about $0.92M to $1.27M across the six months). Use the equal-weight ensemble as a cross-check. Rerun the backtest as each month closes; if the ensemble or another model pulls clearly ahead on the rolling backtest, switch on that evidence, not on one six-month window.
 
 ## Approach
