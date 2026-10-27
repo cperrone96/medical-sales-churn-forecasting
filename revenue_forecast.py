@@ -15,6 +15,9 @@ Candidates:
 * ``sarima_log``: SARIMA(0,1,1)(0,1,1)12, the "airline" model, on log revenue.
 * ``trend_fourier_log``: OLS on log revenue with a linear trend and two
   Fourier harmonic pairs for annual seasonality.
+* ``ensemble_log``: equal-weight average of the four log-scale models on the
+  log scale (geometric mean). Its interval averages the members' bounds the
+  same way, which is a pragmatic approximation rather than an exact interval.
 
 All intervals are 95% prediction intervals for each horizon.
 """
@@ -119,6 +122,26 @@ METHODS: dict[str, Callable[[pd.Series, int], Forecast]] = {
     "trend_fourier_log": _trend_fourier_log,
 }
 BASELINES = ("seasonal_naive", "drift")
+# Equal-weight ensemble of every log-scale model. Its members are fixed in advance,
+# not chosen from backtest results, so it competes on the same footing as the others.
+ENSEMBLE = "ensemble_log"
+ENSEMBLE_MEMBERS = ("ets_log", "ets_damped_log", "sarima_log", "trend_fourier_log")
+CANDIDATES = (*METHODS, ENSEMBLE)
+
+
+def combine(forecasts: Sequence[Forecast]) -> Forecast:
+    """Equal-weight combination on the log scale (geometric mean of forecasts and of interval bounds)."""
+
+    def geo(values: list[np.ndarray]) -> np.ndarray:
+        return np.exp(np.mean(np.log(np.vstack(values)), axis=0))
+
+    return Forecast(
+        geo([f.mean for f in forecasts]),
+        geo([f.lower for f in forecasts]),
+        geo([f.upper for f in forecasts]),
+        all(f.converged for f in forecasts),
+        sorted({n for f in forecasts for n in f.notes}),
+    )
 
 
 def forecast(history: pd.Series, horizon: int, method: str) -> Forecast:
@@ -127,6 +150,8 @@ def forecast(history: pd.Series, horizon: int, method: str) -> Forecast:
     Optimizer warnings are captured into ``notes`` instead of printed; the
     ``converged`` flag comes from the optimizer itself.
     """
+    if method == ENSEMBLE:
+        return combine([forecast(history, horizon, m) for m in ENSEMBLE_MEMBERS])
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = METHODS[method](history, horizon)
@@ -134,8 +159,44 @@ def forecast(history: pd.Series, horizon: int, method: str) -> Forecast:
     return result
 
 
+def per_origin_mape(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Mean absolute percentage error for each (origin, method): one score per backtest origin."""
+    ape = (predictions.actual - predictions.forecast).abs() / predictions.actual
+    return predictions.assign(ape=ape).pivot_table(index="origin", columns="method", values="ape", aggfunc="mean")
+
+
+def select_method(backtest: pd.DataFrame) -> dict:
+    """Pre-specified selection rule: the converged candidate with the lowest backtest MAPE.
+
+    MAPE is averaged over every origin and horizon step (each origin contributes
+    the same number of forecasts, so this equals the mean of per-origin MAPEs).
+    For context, each candidate also gets its spread across origins and a paired
+    comparison with the selected method: the mean per-origin difference and its
+    standard error. A candidate within one paired standard error of the selected
+    one is flagged as not distinguishable from it on the backtest.
+    """
+    converged = backtest.groupby("method").converged.all()
+    scores = per_origin_mape(backtest)[[m for m in converged.index if converged[m]]]
+    selected = str(scores.mean().idxmin())
+    n = len(scores)
+    comparisons = {}
+    for m in scores.columns:
+        diff = scores[m] - scores[selected]
+        se = float(diff.std(ddof=1) / np.sqrt(n)) if m != selected else 0.0
+        comparisons[m] = {
+            "mean_mape": float(scores[m].mean()),
+            "sd_mape_across_origins": float(scores[m].std(ddof=1)),
+            "min_origin_mape": float(scores[m].min()),
+            "max_origin_mape": float(scores[m].max()),
+            "paired_difference_vs_selected": float(diff.mean()),
+            "paired_difference_se": se,
+            "within_one_paired_se": bool(m == selected or diff.mean() <= se),
+        }
+    return {"selected": selected, "n_origins": n, "comparisons": comparisons, "per_origin_mape": scores}
+
+
 def rolling_origin(
-    series: pd.Series, origins: Sequence[int], horizon: int, methods: Sequence[str] = tuple(METHODS)
+    series: pd.Series, origins: Sequence[int], horizon: int, methods: Sequence[str] = CANDIDATES
 ) -> pd.DataFrame:
     """Forecasts from each origin (number of months of history), one row per step."""
     rows = []
@@ -186,10 +247,11 @@ def run_revenue(revenue: pd.Series, holdout: int = 6, horizon: int = 6, first_or
     development = revenue.iloc[:-holdout]
     origins = list(range(first_origin, len(development) - horizon + 1))
     backtest = rolling_origin(development, origins, horizon)
+    selection = select_method(backtest)
+    selected = selection["selected"]
     backtest_scores = score(backtest)
-    eligible = backtest_scores.loc[backtest_scores.all_fits_converged]
-    selected = str(eligible.sort_values("mape").iloc[0]["method"])
 
+    # The holdout is scored once, for every candidate, after selection is fixed.
     holdout_predictions = rolling_origin(revenue, [len(development)], holdout)
     holdout_scores = score(holdout_predictions)
 
@@ -217,9 +279,10 @@ def run_revenue(revenue: pd.Series, holdout: int = 6, horizon: int = 6, first_or
             "backtest_window": [development.index[0].strftime("%Y-%m"), development.index[-1].strftime("%Y-%m")],
             "backtest_origins": len(origins),
             "horizon_months": horizon,
-            "selection_metric": "mean MAPE across all backtest forecasts, among methods whose fits all converged",
+            "selection_rule": "lowest MAPE averaged over all backtest origins and horizon steps, among candidates whose fits all converged; the holdout is not used for selection",
         },
         "backtest": backtest_scores.to_dict(orient="records"),
+        "selection": {k: v for k, v in selection.items() if k != "per_origin_mape"},
         "selected_method": selected,
         "holdout": holdout_scores.to_dict(orient="records"),
         "holdout_selected_vs_best_baseline": {
@@ -229,4 +292,11 @@ def run_revenue(revenue: pd.Series, holdout: int = 6, horizon: int = 6, first_or
         },
         "forward_forecast_converged": future.converged,
     }
-    return {"summary": summary, "backtest": backtest, "holdout": holdout_predictions, "forward": forward}
+    by_origin = selection["per_origin_mape"].reset_index()
+    return {
+        "summary": summary,
+        "backtest": backtest,
+        "backtest_by_origin": by_origin,
+        "holdout": holdout_predictions,
+        "forward": forward,
+    }

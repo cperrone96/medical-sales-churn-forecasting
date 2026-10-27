@@ -180,6 +180,80 @@ def coefficient_recovery(pipe: Pipeline, train: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+# Retention planning assumptions. These are stated, illustrative inputs, NOT estimates from the data.
+# Only account revenue (``annual_revenue``) and the churn outcomes come from the data.
+SAVE_RATE = 0.30  # share of would-be churners that outreach retains
+OUTREACH_COST = 2_500.0  # rep time plus a retention offer, per account contacted (USD)
+CAPACITY_SHARES = (0.05, 0.10, 0.20, 0.30, 0.50)  # share of test-period accounts the team can contact
+SENSITIVITY_SAVE_RATES = (0.15, 0.30, 0.45)
+SENSITIVITY_COSTS = (1_500.0, 2_500.0, 4_000.0)
+
+
+def top_k_mask(p: np.ndarray, k: int) -> np.ndarray:
+    """Boolean mask of the ``k`` highest-risk rows (stable ordering for ties)."""
+    mask = np.zeros(len(p), dtype=bool)
+    mask[np.argsort(-p, kind="stable")[:k]] = True
+    return mask
+
+
+def revenue_protected(y: np.ndarray, revenue: np.ndarray, contact: np.ndarray, save_rate: float) -> float:
+    """Annual revenue kept: revenue of contacted accounts that would have churned, times the save rate."""
+    return float(save_rate * np.sum(contact * y * revenue))
+
+
+def retention_capacity(y: np.ndarray, revenue: np.ndarray, p: np.ndarray, n_boot: int) -> dict:
+    """Revenue protected vs outreach effort when the team works the model's top-k list on the test period."""
+    n = len(y)
+    churned_revenue = float(np.sum(y * revenue))
+    rng = np.random.default_rng(RANDOM_STATE)
+    boot_idx = [rng.integers(0, n, n) for _ in range(n_boot)]
+    rows, sensitivity = [], []
+    for share in CAPACITY_SHARES:
+        k = int(round(share * n))
+        contact = top_k_mask(p, k)
+        protected = revenue_protected(y, revenue, contact, SAVE_RATE)
+        cost = OUTREACH_COST * k
+        boot = [revenue_protected(y[i], revenue[i], top_k_mask(p[i], k), SAVE_RATE) for i in boot_idx]
+        rows.append(
+            {
+                "capacity_share": share,
+                "accounts_contacted": k,
+                "churners_reached": int(np.sum(contact & (y == 1))),
+                "share_of_churned_revenue_reached": float(np.sum(contact * y * revenue) / churned_revenue),
+                "revenue_protected": protected,
+                "revenue_protected_ci_low": float(np.quantile(boot, 0.025)),
+                "revenue_protected_ci_high": float(np.quantile(boot, 0.975)),
+                "model_expected_revenue_protected": float(SAVE_RATE * np.sum(contact * p * revenue)),
+                "random_list_revenue_protected": SAVE_RATE * k / n * churned_revenue,
+                "outreach_cost": cost,
+                "net_of_outreach_cost": protected - cost,
+                "revenue_protected_per_outreach_dollar": protected / cost,
+            }
+        )
+        for save_rate in SENSITIVITY_SAVE_RATES:
+            for unit_cost in SENSITIVITY_COSTS:
+                sensitivity.append(
+                    {
+                        "accounts_contacted": k,
+                        "save_rate": save_rate,
+                        "outreach_cost_per_account": unit_cost,
+                        "net_of_outreach_cost": revenue_protected(y, revenue, contact, save_rate) - unit_cost * k,
+                    }
+                )
+    return {
+        "assumptions": {
+            "save_rate": SAVE_RATE,
+            "outreach_cost_per_account": OUTREACH_COST,
+            "revenue_basis": "annual_revenue of each test-period account, from the data",
+            "value_definition": "save_rate x annual revenue of contacted accounts that churned; no margin applied",
+        },
+        "test_accounts": n,
+        "test_churned_revenue": churned_revenue,
+        "capacity": pd.DataFrame(rows),
+        "sensitivity": pd.DataFrame(sensitivity),
+    }
+
+
 def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
     """Select on validation log loss, score test once, and return tables plus a summary."""
     features = feature_columns(accounts)
@@ -209,6 +283,7 @@ def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
     calibration = pd.concat([calibration_table(y_test, p).assign(model=name) for name, p in test_pred.items()])
     recovery = coefficient_recovery(best["logistic_regression"][0], train)
     drivers = recovery.loc[recovery["is_true_driver"]]
+    retention = retention_capacity(y_test, test["annual_revenue"].to_numpy(), test_pred[selected], n_boot)
 
     summary = {
         "split": {
@@ -228,6 +303,12 @@ def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
         "test": test_metrics,
         "top_decile": ranking,
         "uncertainty_95pct": uncertainty,
+        "retention": {
+            "assumptions": retention["assumptions"],
+            "test_accounts": retention["test_accounts"],
+            "test_churned_revenue": retention["test_churned_revenue"],
+            "capacity": retention["capacity"].to_dict(orient="records"),
+        },
         "coefficient_recovery": {
             "true_drivers": int(len(drivers)),
             "true_drivers_with_correct_sign": int(
@@ -240,6 +321,8 @@ def run_churn(accounts: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
     }
     return {
         "summary": summary,
+        "retention_capacity": retention["capacity"],
+        "retention_sensitivity": retention["sensitivity"],
         "model_selection": pd.DataFrame(selection_rows),
         "calibration": calibration,
         "coefficients": recovery,

@@ -27,6 +27,7 @@ LABELS = {
     "ets_damped_log": "Damped ETS on log",
     "sarima_log": "SARIMA airline on log",
     "trend_fourier_log": "Trend + Fourier on log",
+    "ensemble_log": "Equal-weight ensemble of log-scale models",
 }
 
 
@@ -75,13 +76,21 @@ def plot_churn(predictions: pd.DataFrame, coefficients: pd.DataFrame, path: Path
     plt.close(fig)
 
 
-def plot_revenue(revenue: pd.Series, holdout: pd.DataFrame, forward: pd.DataFrame, selected: str, path: Path) -> None:
+def plot_revenue(
+    revenue: pd.Series,
+    holdout: pd.DataFrame,
+    forward: pd.DataFrame,
+    selected: str,
+    by_origin: pd.DataFrame,
+    holdout_scores: pd.DataFrame,
+    path: Path,
+) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(11, 4.6))
+    fig, (ax, ax_bt) = plt.subplots(1, 2, figsize=(13, 4.8), gridspec_kw={"width_ratios": [1.75, 1]})
     ax.plot(revenue.index, revenue / 1e6, color="#222222", lw=2, label="Actual revenue")
     months = pd.to_datetime(holdout.loc[holdout.method == selected, "month"])
     sel = holdout.loc[holdout.method == selected]
@@ -105,9 +114,31 @@ def plot_revenue(revenue: pd.Series, holdout: pd.DataFrame, forward: pd.DataFram
         fmonths, forward.forecast / 1e6, "o-", color="#2a6fb0", lw=2, label="Next 6 months, refit on all data + 95% PI"
     )
     ax.axvline(months.iloc[0] - pd.Timedelta(days=15), color="#999999", lw=1, ls=":")
-    ax.set(ylabel="Monthly revenue ($M)", title="Revenue forecast: 6-month holdout and forward forecast")
-    ax.legend(frameon=False, fontsize=9, loc="upper left")
-    ax.spines[["top", "right"]].set_visible(False)
+    ax.set(ylabel="Monthly revenue ($M)", title="Holdout and forward forecast")
+    ax.legend(frameon=False, fontsize=8.5, loc="upper left")
+
+    # Right panel: backtest error per origin vs the single holdout score, log-scale candidates only.
+    candidates = [m for m in by_origin.columns if m.endswith("_log")]
+    order = sorted(candidates, key=lambda m: by_origin[m].mean(), reverse=True)
+    hold = holdout_scores.set_index("method")["mape"]
+    for i, m in enumerate(order):
+        color = "#d1495b" if m == selected else "#555555"
+        ax_bt.scatter(100 * by_origin[m], np.full(len(by_origin), i), s=18, color="#bbbbbb", zorder=2)
+        ax_bt.plot([100 * by_origin[m].mean()] * 2, [i - 0.3, i + 0.3], color=color, lw=2.5, zorder=3)
+        ax_bt.scatter(100 * hold[m], i, marker="D", s=40, color="#2a6fb0", zorder=4)
+    ax_bt.scatter([], [], s=18, color="#bbbbbb", label="Backtest MAPE, one origin")
+    ax_bt.plot([], [], color="#555555", lw=2.5, label="Backtest mean (selection metric)")
+    ax_bt.scatter([], [], marker="D", s=40, color="#2a6fb0", label="Holdout MAPE (scored once)")
+    short = {"ensemble_log": "Ensemble (equal weight)", "trend_fourier_log": "Trend + Fourier"}
+    ax_bt.set_yticks(
+        range(len(order)),
+        [short.get(m, LABELS[m].replace(" on log", "")) + ("\n(selected)" if m == selected else "") for m in order],
+    )
+    ax_bt.set_ylim(-0.6, len(order) - 0.4)
+    ax_bt.set(xlabel="MAPE (%), log-scale models", title="Backtest spread (7 origins) vs 6-month holdout")
+    ax_bt.legend(frameon=False, fontsize=8.5, loc="upper center", bbox_to_anchor=(0.45, -0.16), ncol=2)
+    for a in (ax, ax_bt):
+        a.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -125,9 +156,12 @@ def run_analysis(
     churn["model_selection"].to_csv(output_dir / "churn_model_selection.csv", index=False)
     churn["calibration"].to_csv(output_dir / "churn_calibration.csv", index=False)
     churn["coefficients"].to_csv(output_dir / "churn_logistic_coefficients.csv", index=False)
+    churn["retention_capacity"].to_csv(output_dir / "retention_capacity.csv", index=False)
+    churn["retention_sensitivity"].to_csv(output_dir / "retention_sensitivity.csv", index=False)
 
     rev = run_revenue(revenue)
     rev["backtest"].to_csv(output_dir / "rolling_origin_forecasts.csv", index=False)
+    rev["backtest_by_origin"].to_csv(output_dir / "rolling_origin_mape_by_origin.csv", index=False)
     rev["holdout"].to_csv(output_dir / "revenue_holdout_forecasts.csv", index=False)
     rev["forward"].to_csv(output_dir / "revenue_forward_forecast.csv", index=False)
 
@@ -146,6 +180,8 @@ def run_analysis(
             rev["holdout"],
             rev["forward"],
             rev["summary"]["selected_method"],
+            rev["backtest_by_origin"].set_index("origin"),
+            pd.DataFrame(rev["summary"]["holdout"]),
             figure_dir / "revenue_forecast.png",
         )
     return summary
